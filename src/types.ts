@@ -38,6 +38,7 @@ export interface Sale {
   total_amount: number;
   payment_method: string;
   created_at: string;
+  customer_id?: number;
 }
 
 export interface SaleItem {
@@ -54,6 +55,7 @@ export interface Stats {
   repairedCount: number;
   soldCount: number;
   dailyProfit: number;
+  profit: number;
   pendingRepairs: number;
   lowStock: number;
 }

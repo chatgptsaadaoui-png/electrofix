@@ -100,6 +100,8 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isServerDown, setIsServerDown] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [repairStatusFilter, setRepairStatusFilter] = useState<string>('all');
 
   const checkHealth = async () => {
     try {
@@ -438,6 +440,7 @@ export default function App() {
         localStorage.setItem('supabase_user_id', session.user.id);
         setView('app');
       }
+      setIsAuthChecking(false);
     });
 
     const {
@@ -451,6 +454,7 @@ export default function App() {
         localStorage.removeItem('supabase_user_id');
         setView('landing');
       }
+      setIsAuthChecking(false);
     });
 
     return () => subscription.unsubscribe();
@@ -506,6 +510,14 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
+
+  if (isAuthChecking) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   if (view === 'landing') {
     return <LandingPage onGetStarted={() => setView('auth')} />;
@@ -930,7 +942,20 @@ export default function App() {
   const renderRepairs = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-slate-900">الإصلاحات</h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-bold text-slate-900">الإصلاحات</h2>
+          <select 
+            value={repairStatusFilter}
+            onChange={(e) => setRepairStatusFilter(e.target.value)}
+            className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
+          >
+            <option value="all">جميع الحالات</option>
+            <option value="pending">قيد الانتظار</option>
+            <option value="repaired">تم الإصلاح</option>
+            <option value="waiting_parts">في انتظار القطع</option>
+            <option value="delivered">تم التسليم</option>
+          </select>
+        </div>
         <button 
           onClick={() => {
             setEditingRepair(null);
@@ -968,12 +993,16 @@ export default function App() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {repairs.filter(r => 
-              r.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              r.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              r.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              r.problem.toLowerCase().includes(searchQuery.toLowerCase())
-            ).map((repair) => (
+            {repairs.filter(r => {
+              const matchesSearch = r.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                r.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                r.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                r.problem.toLowerCase().includes(searchQuery.toLowerCase());
+              
+              const matchesStatus = repairStatusFilter === 'all' || r.status === repairStatusFilter;
+              
+              return matchesSearch && matchesStatus;
+            }).map((repair) => (
               <tr key={repair.id} className="hover:bg-indigo-50/50 transition-colors">
                 <td className="px-6 py-4">
                   <p className="text-sm font-medium text-slate-900">{repair.customer_name}</p>

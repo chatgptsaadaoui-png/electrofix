@@ -4,6 +4,7 @@
 
 const apiFetch = async (endpoint: string, options: any = {}) => {
   const userId = localStorage.getItem('supabase_user_id');
+  console.log(`[dbService] Fetching: /api${endpoint}, userId: ${userId}`);
   try {
     const response = await fetch(`/api${endpoint}`, {
       ...options,
@@ -14,10 +15,22 @@ const apiFetch = async (endpoint: string, options: any = {}) => {
       },
     });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'API Error');
+      const text = await response.text();
+      console.error(`[dbService] API Error: ${response.status} ${text}`);
+      try {
+        const json = JSON.parse(text);
+        throw new Error(json.error || 'API Error');
+      } catch (e) {
+        throw new Error(`API Error: ${response.status}`);
+      }
     }
-    return response.json();
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error(`[dbService] JSON Parse Error: ${text.substring(0, 100)}`);
+      throw new Error('Invalid JSON response from server');
+    }
   } catch (error: any) {
     if (error.message === 'Failed to fetch') {
       throw new Error('تعذر الاتصال بالسيرفر. يرجى التأكد من أن التطبيق يعمل.');

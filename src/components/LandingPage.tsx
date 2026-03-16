@@ -18,25 +18,22 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
   return (
-    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900" dir="rtl">
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
+          <div className="flex justify-between h-20 items-center">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-indigo-600 rounded-lg">
-                <Smartphone className="text-white" size={20} />
-              </div>
-              <span className="text-xl font-bold tracking-tight">FixMaster</span>
+              <span className="text-2xl font-black tracking-tighter text-indigo-600">FIXMASTER</span>
             </div>
-            <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
+            <div className="hidden md:flex items-center gap-10 text-sm font-bold text-slate-500">
               <a href="#features" className="hover:text-indigo-600 transition-colors">المميزات</a>
               <a href="#how-it-works" className="hover:text-indigo-600 transition-colors">كيف يعمل</a>
               <a href="#pricing" className="hover:text-indigo-600 transition-colors">الأسعار</a>
             </div>
             <button 
               onClick={onGetStarted}
-              className="px-5 py-2 bg-indigo-600 text-white text-sm font-bold rounded-full hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+              className="px-6 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-full hover:bg-slate-800 transition-all"
             >
               ابدأ الآن
             </button>
@@ -45,78 +42,53 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 overflow-hidden">
+      <section className="pt-40 pb-24 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="flex flex-col items-center text-center max-w-4xl mx-auto">
             <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              className="text-right"
             >
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-xs font-bold mb-6">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 text-indigo-600 text-xs font-bold mb-8">
                 <Zap size={14} />
                 <span>أفضل نظام لإدارة محلات الإصلاح في المغرب</span>
               </div>
-              <h1 className="text-5xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] mb-6">
+              <h1 className="text-6xl lg:text-8xl font-black tracking-tight leading-[0.9] mb-8">
                 سير محلك <br /> 
                 <span className="text-indigo-600">بذكاء واحترافية</span>
               </h1>
-              <p className="text-lg text-slate-600 mb-8 max-w-lg ml-auto">
-                نظام متكامل لإدارة الإصلاحات، المبيعات، المخزون، والعملاء. صمم خصيصاً لمحلات الهواتف والإلكترونيات.
+              <p className="text-xl text-slate-500 mb-12 max-w-2xl mx-auto leading-relaxed">
+                نظام متكامل لإدارة الإصلاحات، المبيعات، المخزون، والعملاء. صمم خصيصاً لمحلات الهواتف والإلكترونيات في المغرب.
               </p>
-              <div className="flex flex-col sm:flex-row-reverse gap-4 justify-start">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button 
                   onClick={onGetStarted}
-                  className="px-8 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 group shadow-xl shadow-indigo-100"
+                  className="px-10 py-5 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 group shadow-2xl shadow-indigo-200"
                 >
                   <span>ابدأ تجربتك المجانية</span>
                   <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </button>
-                <button className="px-8 py-4 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all">
+                <button className="px-10 py-5 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all">
                   شاهد العرض التجريبي
                 </button>
               </div>
-              <div className="mt-10 flex items-center gap-4 justify-end">
-                <div className="flex -space-x-2 space-x-reverse">
-                  {[1, 2, 3, 4].map(i => (
+              
+              <div className="mt-16 flex flex-col items-center gap-6">
+                <div className="flex -space-x-3 space-x-reverse">
+                  {[1, 2, 3, 4, 5].map(i => (
                     <img 
                       key={i}
                       src={`https://picsum.photos/seed/user${i}/100/100`} 
-                      className="w-10 h-10 rounded-full border-2 border-white"
+                      className="w-12 h-12 rounded-full border-4 border-white shadow-sm"
                       alt="User"
                       referrerPolicy="no-referrer"
                     />
                   ))}
                 </div>
-                <p className="text-sm text-slate-500 font-medium">
-                  انضم إلى <span className="text-slate-900 font-bold">+500</span> صاحب محل في المغرب
+                <p className="text-sm text-slate-400 font-bold">
+                  انضم إلى <span className="text-slate-900">+500</span> صاحب محل يثقون بنا في المغرب
                 </p>
-              </div>
-            </motion.div>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              className="relative"
-            >
-              <div className="absolute -inset-4 bg-indigo-500/10 blur-3xl rounded-full"></div>
-              <img 
-                src="https://picsum.photos/seed/dashboard/1200/800" 
-                alt="Dashboard Preview" 
-                className="relative rounded-3xl shadow-2xl border border-slate-100"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-2xl shadow-xl border border-slate-100 hidden sm:block">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
-                    <BarChart3 size={20} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 font-bold">الأرباح اليومية</p>
-                    <p className="text-lg font-bold text-slate-900">+1,250 DH</p>
-                  </div>
-                </div>
               </div>
             </motion.div>
           </div>

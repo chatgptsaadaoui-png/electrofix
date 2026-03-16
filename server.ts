@@ -1,10 +1,10 @@
+import * as dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
-import * as dotenv from "dotenv";
-
-dotenv.config();
 
 // Supabase Configuration
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -31,13 +31,24 @@ async function startServer() {
   app.use(express.json());
 
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", supabaseConfigured: isSupabaseConfiguredServer });
+    res.json({ 
+      status: "ok", 
+      supabaseConfigured: isSupabaseConfiguredServer,
+      details: {
+        url: !!process.env.SUPABASE_URL,
+        serviceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        anonKey: !!process.env.SUPABASE_ANON_KEY,
+        viteUrl: !!process.env.VITE_SUPABASE_URL,
+        viteAnonKey: !!process.env.VITE_SUPABASE_ANON_KEY
+      }
+    });
   });
 
   // API Routes
   
   // Middleware to get user ID
   app.use("/api", (req, res, next) => {
+    console.log(`API Request: ${req.method} ${req.path}`);
     const userId = req.headers['x-user-id'];
     if (!userId && req.method !== 'GET' && req.path !== '/stats') {
       // For now, we'll allow it but in a real app we'd block
@@ -173,6 +184,7 @@ async function startServer() {
 
   // Bootstrap Data (All initial data in one request)
   app.get("/api/bootstrap", async (req, res) => {
+    console.log("HIT: /api/bootstrap");
     try {
       const userId = (req as any).userId;
       
@@ -728,6 +740,12 @@ async function startServer() {
       console.error("Error deleting sale:", JSON.stringify(error));
       res.status(500).json({ error: "Failed to delete sale." });
     }
+  });
+
+  // Catch-all for API routes to prevent falling through to Vite/HTML
+  app.all("/api/*", (req, res) => {
+    console.warn(`API Route not found: ${req.method} ${req.path}`);
+    res.status(404).json({ error: `API Route ${req.method} ${req.path} not found` });
   });
 
   // Vite middleware for development

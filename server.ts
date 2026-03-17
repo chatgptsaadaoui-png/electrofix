@@ -691,7 +691,7 @@ async function setupServer() {
       const userId = (req as any).userId;
 
       // 1. Sales by Type
-      let saleItemsQuery = supabase.from('sale_items').select('quantity, price, products(type, user_id)');
+      let saleItemsQuery = supabase.from('sale_items').select('quantity, price, purchase_price, products(type, user_id)');
       const { data: saleItemsData, error: saleItemsError } = await saleItemsQuery;
       
       if (saleItemsError) {
@@ -703,11 +703,15 @@ async function setupServer() {
         if (userId && item.products?.user_id !== userId) return;
         const type = item.products?.type || 'other';
         const revenue = (item.quantity || 0) * (item.price || 0);
-        salesByTypeMap[type] = (salesByTypeMap[type] || 0) + revenue;
+        const profit = (item.quantity || 0) * (item.price - (item.purchase_price || 0));
+        
+        if (!salesByTypeMap[type]) salesByTypeMap[type] = { revenue: 0, profit: 0 };
+        salesByTypeMap[type].revenue += revenue;
+        salesByTypeMap[type].profit += profit;
       });
 
-      // 2. Monthly Revenue
-      let monthlySalesQuery = supabase.from('sales').select('created_at, total_amount');
+      // 2. Monthly Revenue & Profit
+      let monthlySalesQuery = supabase.from('sales').select('created_at, total_amount, id');
       if (userId) monthlySalesQuery = monthlySalesQuery.eq('user_id', userId);
       const { data: monthlySales, error: monthlySalesError } = await monthlySalesQuery;
       
@@ -715,12 +719,46 @@ async function setupServer() {
         console.error("Reports Monthly Sales Error:", monthlySalesError);
         return res.status(500).json({ error: "Failed to fetch monthly sales for reports", details: monthlySalesError });
       }
-      const monthlyRevenueMap: any = {};
+
+      // Get all sale items to calculate profit
+      const saleIds = monthlySales?.map(s => s.id) || [];
+      let saleItemsProfitMap: any = {};
+      if (saleIds.length > 0) {
+        const { data: allSaleItems } = await supabase.from('sale_items').select('sale_id, price, purchase_price, quantity').in('sale_id', saleIds);
+        allSaleItems?.forEach(item => {
+          const profit = (item.price - (item.purchase_price || 0)) * item.quantity;
+          saleItemsProfitMap[item.sale_id] = (saleItemsProfitMap[item.sale_id] || 0) + profit;
+        });
+      }
+
+      // Get all repairs to include in monthly revenue/profit
+      let monthlyRepairsQuery = supabase.from('repairs').select('received_date, expected_price, cost_price').or('status.eq.repaired,status.eq.delivered');
+      if (userId) monthlyRepairsQuery = monthlyRepairsQuery.eq('user_id', userId);
+      const { data: monthlyRepairs } = await monthlyRepairsQuery;
+
+      const monthlyDataMap: any = {};
+      
+      // Process Sales
       monthlySales?.forEach(s => {
         const month = s.created_at.substring(0, 7); // YYYY-MM
-        monthlyRevenueMap[month] = (monthlyRevenueMap[month] || 0) + s.total_amount;
+        if (!monthlyDataMap[month]) monthlyDataMap[month] = { revenue: 0, profit: 0 };
+        monthlyDataMap[month].revenue += s.total_amount;
+        monthlyDataMap[month].profit += (saleItemsProfitMap[s.id] || 0);
       });
-      const monthlyRevenue = Object.entries(monthlyRevenueMap).map(([month, revenue]) => ({ month, revenue })).sort((a, b) => a.month.localeCompare(b.month)).slice(-12);
+
+      // Process Repairs
+      monthlyRepairs?.forEach(r => {
+        const month = r.received_date.substring(0, 7);
+        if (!monthlyDataMap[month]) monthlyDataMap[month] = { revenue: 0, profit: 0 };
+        monthlyDataMap[month].revenue += (r.expected_price || 0);
+        monthlyDataMap[month].profit += ((r.expected_price || 0) - (r.cost_price || 0));
+      });
+
+      const monthlyRevenue = Object.entries(monthlyDataMap).map(([month, data]: any) => ({ 
+        month, 
+        revenue: data.revenue,
+        profit: data.profit
+      })).sort((a, b) => a.month.localeCompare(b.month)).slice(-12);
 
       // 3. Repair Stats
       let repairsStatsQuery = supabase.from('repairs').select('status');
@@ -737,7 +775,7 @@ async function setupServer() {
       });
 
       // 4. Top Products
-      let topProductsQuery = supabase.from('sale_items').select('quantity, products(name, id, user_id)');
+      let topProductsQuery = supabase.from('sale_items').select('quantity, price, products(name, id, user_id)');
       const { data: topProductsData, error: topProductsError } = await topProductsQuery;
       
       if (topProductsError) {
@@ -748,9 +786,11 @@ async function setupServer() {
       topProductsData?.forEach((item: any) => {
         if (userId && item.products?.user_id !== userId) return;
         const name = item.products?.name || 'Unknown';
-        topProductsMap[name] = (topProductsMap[name] || 0) + item.quantity;
+        if (!topProductsMap[name]) topProductsMap[name] = { total_sold: 0, total_revenue: 0 };
+        topProductsMap[name].total_sold += item.quantity;
+        topProductsMap[name].total_revenue += (item.quantity * item.price);
       });
-      const topProducts = Object.entries(topProductsMap).map(([name, total_sold]) => ({ name, total_sold })).sort((a: any, b: any) => b.total_sold - a.total_sold).slice(0, 5);
+      const topProducts = Object.entries(topProductsMap).map(([name, stats]: any) => ({ name, ...stats })).sort((a: any, b: any) => b.total_sold - a.total_sold).slice(0, 5);
 
       // 5. Top Customers
       let topCustomersQuery = supabase.from('sales').select('total_amount, customers(name, id, user_id)');
@@ -794,7 +834,11 @@ async function setupServer() {
 
       res.json({
         monthlyRevenue,
-        salesByType: Object.entries(salesByTypeMap).map(([type, value]) => ({ name: typeLabels[type] || type, value })),
+        salesByType: Object.entries(salesByTypeMap).map(([type, data]: any) => ({ 
+          name: typeLabels[type] || type, 
+          value: data.revenue,
+          profit: data.profit
+        })),
         repairStats: Object.entries(repairStatsMap).map(([status, count]) => ({ status: statusLabels[status] || status, count })),
         topProducts,
         topCustomers,

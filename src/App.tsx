@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, Link, NavLink, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -27,7 +28,8 @@ import {
   LogOut,
   Lock,
   Loader2,
-  Check
+  Check,
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -47,6 +49,7 @@ import {
   Legend
 } from 'recharts';
 import { format } from 'date-fns';
+import { ar } from 'date-fns/locale';
 import { cn, formatCurrency } from './lib/utils';
 import { Customer, Product, Repair, Sale, Stats } from './types';
 import { dbService } from './services/db';
@@ -56,19 +59,20 @@ import { Auth } from './components/Auth';
 
 // --- Components ---
 
-const SidebarItem = ({ icon: Icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) => (
-  <button
+const SidebarItem = ({ icon: Icon, label, to, onClick }: { icon: any, label: string, to: string, onClick?: () => void }) => (
+  <NavLink
+    to={to}
     onClick={onClick}
-    className={cn(
+    className={({ isActive }) => cn(
       "flex items-center w-full gap-3 px-4 py-3 text-sm font-medium transition-colors rounded-lg",
-      active 
+      isActive 
         ? "bg-indigo-500/10 text-indigo-400" 
         : "text-slate-400 hover:bg-slate-800 hover:text-white"
     )}
   >
     <Icon size={20} />
     <span>{label}</span>
-  </button>
+  </NavLink>
 );
 
 const StatCard = ({ label, value, icon: Icon, color, trend }: { label: string, value: string | number, icon: any, color: string, trend?: string }) => (
@@ -91,9 +95,9 @@ const StatCard = ({ label, value, icon: Icon, color, trend }: { label: string, v
 // --- Main App ---
 
 export default function App() {
-  const [view, setView] = useState<'landing' | 'auth' | 'app'>('landing');
+  const navigate = useNavigate();
+  const location = useLocation();
   const [session, setSession] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [stats, setStats] = useState<Stats | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -509,7 +513,6 @@ export default function App() {
       setSession(session);
       if (session?.user?.id) {
         localStorage.setItem('supabase_user_id', session.user.id);
-        setView('app');
       } else {
         localStorage.removeItem('supabase_user_id');
       }
@@ -522,10 +525,8 @@ export default function App() {
       setSession(session);
       if (session?.user?.id) {
         localStorage.setItem('supabase_user_id', session.user.id);
-        setView('app');
       } else {
         localStorage.removeItem('supabase_user_id');
-        setView('landing');
       }
       setIsAuthChecking(false);
     });
@@ -569,13 +570,12 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (view === 'app') {
+    if (session) {
       loadInitialData();
     }
-  }, [view]);
+  }, [session]);
 
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
     if (window.innerWidth < 1024) {
       setIsSidebarOpen(false);
     }
@@ -593,15 +593,16 @@ export default function App() {
     );
   }
 
-  if (view === 'landing') {
-    return <LandingPage onGetStarted={() => setView('auth')} />;
+  if (!session) {
+    return (
+      <Routes>
+        <Route path="/auth" element={<Auth onSuccess={() => navigate('/dashboard')} onBack={() => navigate('/')} />} />
+        <Route path="*" element={<LandingPage onGetStarted={() => navigate('/auth')} />} />
+      </Routes>
+    );
   }
 
-  if (view === 'auth') {
-    return <Auth onSuccess={() => setView('app')} onBack={() => setView('landing')} />;
-  }
-
-  if (isInitialLoading && view === 'app') {
+  if (isInitialLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-white">
         <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -1482,43 +1483,148 @@ export default function App() {
       </div>
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-          <p className="text-sm font-bold text-slate-500 mb-1">قيمة المخزون (شراء)</p>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+              <Package size={20} />
+            </div>
+            <p className="text-sm font-bold text-slate-500">قيمة المخزون</p>
+          </div>
           <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(stockValue.purchase)}</h3>
-          <div className="mt-2 text-xs text-slate-400">القيمة الإجمالية للسلع المتوفرة حالياً</div>
+          <p className="mt-2 text-xs text-slate-400">إجمالي تكلفة السلع المتوفرة</p>
         </div>
+        
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-          <p className="text-sm font-bold text-slate-500 mb-1">القيمة البيعية للمخزون</p>
-          <h3 className="text-2xl font-bold text-emerald-600">{formatCurrency(stockValue.selling)}</h3>
-          <div className="mt-2 text-xs text-slate-400">الربح المتوقع: {formatCurrency(stockValue.selling - stockValue.purchase)}</div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+              <TrendingUp size={20} />
+            </div>
+            <p className="text-sm font-bold text-slate-500">الأرباح المتوقعة</p>
+          </div>
+          <h3 className="text-2xl font-bold text-emerald-600">{formatCurrency(stockValue.selling - stockValue.purchase)}</h3>
+          <p className="mt-2 text-xs text-slate-400">في حال بيع كل المخزون الحالي</p>
         </div>
+
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-          <p className="text-sm font-bold text-slate-500 mb-1">نسبة نجاح الإصلاح</p>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <CheckCircle2 size={20} />
+            </div>
+            <p className="text-sm font-bold text-slate-500">كفاءة الإصلاح</p>
+          </div>
           <h3 className="text-2xl font-bold text-blue-600">{repairSuccessRate}%</h3>
-          <div className="mt-2 text-xs text-slate-400">نسبة الأجهزة التي تم إصلاحها وتسليمها</div>
+          <p className="mt-2 text-xs text-slate-400">نسبة نجاح عمليات الإصلاح</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-violet-50 text-violet-600 rounded-lg">
+              <Calendar size={20} />
+            </div>
+            <p className="text-sm font-bold text-slate-500">أداء الشهر الحالي</p>
+          </div>
+          <h3 className="text-2xl font-bold text-violet-600">
+            {formatCurrency(monthlyRevenue.find(m => m.month === format(new Date(), 'yyyy-MM'))?.profit || 0)}
+          </h3>
+          <p className="mt-2 text-xs text-slate-400">صافي أرباح شهر {format(new Date(), 'MMMM', { locale: ar })}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Monthly Revenue & Profit Chart */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm lg:col-span-2">
-          <h3 className="text-lg font-bold text-slate-900 mb-6">الأداء المالي الشهري (المدخول والأرباح)</h3>
-          <div className="h-[350px] w-full">
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">الأداء المالي الشهري</h3>
+              <p className="text-sm text-slate-500">تتبع المداخيل والأرباح الصافية خلال الـ 12 شهراً الماضية</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-slate-200 rounded-sm"></div>
+                <span className="text-xs text-slate-600">إجمالي المداخيل</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-emerald-500 rounded-sm"></div>
+                <span className="text-xs text-slate-600">صافي الأرباح</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="h-[350px] w-full mb-8">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={monthlyRevenue}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                <XAxis 
+                  dataKey="month" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 12, fill: '#64748b' }}
+                  formatter={(value: string) => {
+                    const [year, month] = value.split('-');
+                    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+                    return `${months[parseInt(month) - 1]} ${year}`;
+                  }}
+                />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   formatter={(value: number) => [formatCurrency(value), '']}
+                  labelFormatter={(label: string) => {
+                    const [year, month] = label.split('-');
+                    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+                    return `${months[parseInt(month) - 1]} ${year}`;
+                  }}
                 />
-                <Legend verticalAlign="top" align="right" height={36}/>
-                <Bar dataKey="revenue" name="إجمالي المدخول" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-                <Line type="monotone" dataKey="profit" name="صافي الربح" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981' }} />
+                <Bar dataKey="revenue" name="إجمالي المداخيل" fill="#f1f5f9" radius={[6, 6, 0, 0]} barSize={40} />
+                <Line 
+                  type="monotone" 
+                  dataKey="profit" 
+                  name="صافي الأرباح" 
+                  stroke="#10b981" 
+                  strokeWidth={4} 
+                  dot={{ r: 6, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} 
+                  activeDot={{ r: 8, strokeWidth: 0 }}
+                />
               </ComposedChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Monthly Data Table */}
+          <div className="mt-8 border border-slate-100 rounded-xl overflow-hidden">
+            <table className="w-full text-right text-sm">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>
+                  <th className="px-6 py-3 font-bold text-slate-600">الشهر</th>
+                  <th className="px-6 py-3 font-bold text-slate-600">إجمالي المداخيل</th>
+                  <th className="px-6 py-3 font-bold text-slate-600">صافي الأرباح</th>
+                  <th className="px-6 py-3 font-bold text-slate-600">هامش الربح</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {[...monthlyRevenue].reverse().map((item) => {
+                  const [year, month] = item.month.split('-');
+                  const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+                  const margin = item.revenue > 0 ? ((item.profit / item.revenue) * 100).toFixed(1) : 0;
+                  
+                  return (
+                    <tr key={item.month} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-3 font-medium text-slate-900">{months[parseInt(month) - 1]} {year}</td>
+                      <td className="px-6 py-3 text-slate-600">{formatCurrency(item.revenue)}</td>
+                      <td className="px-6 py-3 font-bold text-emerald-600">{formatCurrency(item.profit)}</td>
+                      <td className="px-6 py-3">
+                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                          parseFloat(margin as string) > 30 ? 'bg-emerald-100 text-emerald-700' : 
+                          parseFloat(margin as string) > 15 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {margin}%
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -1693,19 +1799,6 @@ export default function App() {
     );
   };
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard': return renderDashboard();
-      case 'customers': return renderCustomers();
-      case 'repairs': return renderRepairs();
-      case 'stock': return renderStock();
-      case 'sales': return renderSales();
-      case 'invoices': return renderInvoices();
-      case 'reports': return renderReports();
-      default: return <div className="flex items-center justify-center h-full text-slate-400">قيد التطوير...</div>;
-    }
-  };
-
   const renderSidebarContent = () => (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-6 py-8">
@@ -1719,43 +1812,43 @@ export default function App() {
         <SidebarItem 
           icon={LayoutDashboard} 
           label="لوحة التحكم" 
-          active={activeTab === 'dashboard'} 
+          to="/dashboard"
           onClick={() => handleTabChange('dashboard')} 
         />
         <SidebarItem 
           icon={Users} 
           label="العملاء" 
-          active={activeTab === 'customers'} 
+          to="/customers"
           onClick={() => handleTabChange('customers')} 
         />
         <SidebarItem 
           icon={Wrench} 
           label="الإصلاحات" 
-          active={activeTab === 'repairs'} 
+          to="/repairs"
           onClick={() => handleTabChange('repairs')} 
         />
         <SidebarItem 
           icon={Package} 
           label="المخزون" 
-          active={activeTab === 'stock'} 
+          to="/stock"
           onClick={() => handleTabChange('stock')} 
         />
         <SidebarItem 
           icon={ShoppingCart} 
           label="المبيعات" 
-          active={activeTab === 'sales'} 
+          to="/sales"
           onClick={() => handleTabChange('sales')} 
         />
         <SidebarItem 
           icon={FileText} 
           label="الفواتير" 
-          active={activeTab === 'invoices'} 
+          to="/invoices"
           onClick={() => handleTabChange('invoices')} 
         />
         <SidebarItem 
           icon={BarChart3} 
           label="التقارير" 
-          active={activeTab === 'reports'} 
+          to="/reports"
           onClick={() => handleTabChange('reports')} 
         />
       </nav>
@@ -1869,7 +1962,17 @@ export default function App() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
-          {renderContent()}
+          <Routes>
+            <Route path="/dashboard" element={renderDashboard()} />
+            <Route path="/customers" element={renderCustomers()} />
+            <Route path="/repairs" element={renderRepairs()} />
+            <Route path="/stock" element={renderStock()} />
+            <Route path="/sales" element={renderSales()} />
+            <Route path="/invoices" element={renderInvoices()} />
+            <Route path="/reports" element={renderReports()} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<div className="flex items-center justify-center h-full text-slate-400">الصفحة غير موجودة</div>} />
+          </Routes>
         </div>
 
         {/* Modals */}

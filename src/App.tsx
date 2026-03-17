@@ -1724,8 +1724,19 @@ export default function App() {
             </span>
           </div>
           {serverError && (
-            <div className="mt-1 text-red-400 break-words leading-tight text-[9px] max-h-20 overflow-y-auto">
-              {serverError}
+            <div className="mt-2 p-2 bg-red-900/30 border border-red-500/30 rounded-lg">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[9px] font-bold text-red-400 uppercase tracking-wider">Error Log:</span>
+                <button 
+                  onClick={() => alert(serverError)}
+                  className="text-[8px] bg-red-500/20 hover:bg-red-500/40 text-red-300 px-1.5 py-0.5 rounded transition-colors"
+                >
+                  Full View
+                </button>
+              </div>
+              <div className="text-[9px] font-mono text-red-300/80 max-h-32 overflow-y-auto break-all whitespace-pre-wrap scrollbar-thin scrollbar-thumb-red-500/20">
+                {serverError}
+              </div>
             </div>
           )}
         </div>
@@ -1792,8 +1803,20 @@ export default function App() {
               <span>تعذر الاتصال بالسيرفر. يرجى التأكد من تشغيل المشروع بشكل صحيح.</span>
             </div>
             {serverError && (
-              <div className="text-[10px] opacity-80 font-mono">
-                Error: {serverError}
+              <div className="mt-2 p-3 bg-black/20 rounded-lg text-xs font-mono text-white/90 max-w-2xl w-full text-left overflow-x-auto whitespace-pre-wrap break-all border border-white/10">
+                <div className="flex justify-between items-start mb-1 border-b border-white/10 pb-1">
+                  <span className="font-bold uppercase tracking-wider text-[10px] opacity-70">Server Error Details:</span>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(serverError);
+                      alert('تم نسخ الخطأ!');
+                    }}
+                    className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+                {serverError}
               </div>
             )}
             <button 

@@ -126,26 +126,29 @@ async function startServer() {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
 
-      // Use Promise.all for parallel queries
-      const [
-        repairedRes,
-        salesRes,
-        pendingRes,
-        productsRes,
-        todaySalesRes,
-        todayRepairsRes
-      ] = await Promise.all([
-        applyDateFilter(supabase.from('repairs').select('id', { count: 'exact', head: true }).or('status.eq.repaired,status.eq.delivered'), 'received_date'),
-        applyDateFilter(supabase.from('sales').select('id'), 'created_at'),
-        (userId ? supabase.from('repairs').select('id', { count: 'exact', head: true }).or('status.eq.pending,status.eq.waiting_parts').eq('user_id', userId) : supabase.from('repairs').select('id', { count: 'exact', head: true }).or('status.eq.pending,status.eq.waiting_parts')),
-        (userId ? supabase.from('products').select('stock_quantity, min_stock_level').eq('user_id', userId) : supabase.from('products').select('stock_quantity, min_stock_level')),
-        (userId ? supabase.from('sales').select('id').gte('created_at', todayStart.toISOString()).eq('user_id', userId) : supabase.from('sales').select('id').gte('created_at', todayStart.toISOString())),
-        (userId ? supabase.from('repairs').select('expected_price, cost_price').or('status.eq.repaired,status.eq.delivered').gte('received_date', todayStart.toISOString()).eq('user_id', userId) : supabase.from('repairs').select('expected_price, cost_price').or('status.eq.repaired,status.eq.delivered').gte('received_date', todayStart.toISOString()))
-      ]);
+      // Use individual awaits to prevent Promise.all rejection from crashing the server
+      const repairedRes = await applyDateFilter(supabase.from('repairs').select('id', { count: 'exact', head: true }).or('status.eq.repaired,status.eq.delivered'), 'received_date');
+      const salesRes = await applyDateFilter(supabase.from('sales').select('id'), 'created_at');
+      
+      let pendingQuery = supabase.from('repairs').select('id', { count: 'exact', head: true }).or('status.eq.pending,status.eq.waiting_parts');
+      if (userId) pendingQuery = pendingQuery.eq('user_id', userId);
+      const pendingRes = await pendingQuery;
+
+      let productsQuery = supabase.from('products').select('stock_quantity, min_stock_level');
+      if (userId) productsQuery = productsQuery.eq('user_id', userId);
+      const productsRes = await productsQuery;
+
+      let todaySalesQuery = supabase.from('sales').select('id').gte('created_at', todayStart.toISOString());
+      if (userId) todaySalesQuery = todaySalesQuery.eq('user_id', userId);
+      const todaySalesRes = await todaySalesQuery;
+
+      let todayRepairsQuery = supabase.from('repairs').select('expected_price, cost_price').or('status.eq.repaired,status.eq.delivered').gte('received_date', todayStart.toISOString());
+      if (userId) todayRepairsQuery = todayRepairsQuery.eq('user_id', userId);
+      const todayRepairsRes = await todayRepairsQuery;
 
       // Check for errors in results
       const errors = [repairedRes, salesRes, pendingRes, productsRes, todaySalesRes, todayRepairsRes]
-        .filter(r => r.error)
+        .filter(r => r && r.error)
         .map(r => r.error);
 
       if (errors.length > 0) {
@@ -673,11 +676,20 @@ async function startServer() {
   // Reports
   app.get("/api/reports", async (req, res) => {
     try {
+      if (!isSupabaseConfiguredServer) {
+        return res.status(503).json({ error: "Database not configured" });
+      }
+
       const userId = (req as any).userId;
 
       // 1. Sales by Type
       let saleItemsQuery = supabase.from('sale_items').select('quantity, price, products(type, user_id)');
-      const { data: saleItemsData } = await saleItemsQuery;
+      const { data: saleItemsData, error: saleItemsError } = await saleItemsQuery;
+      
+      if (saleItemsError) {
+        console.error("Reports Sale Items Error:", saleItemsError);
+        return res.status(500).json({ error: "Failed to fetch sale items for reports", details: saleItemsError });
+      }
       const salesByTypeMap: any = {};
       saleItemsData?.forEach((item: any) => {
         if (userId && item.products?.user_id !== userId) return;
@@ -689,7 +701,12 @@ async function startServer() {
       // 2. Monthly Revenue
       let monthlySalesQuery = supabase.from('sales').select('created_at, total_amount');
       if (userId) monthlySalesQuery = monthlySalesQuery.eq('user_id', userId);
-      const { data: monthlySales } = await monthlySalesQuery;
+      const { data: monthlySales, error: monthlySalesError } = await monthlySalesQuery;
+      
+      if (monthlySalesError) {
+        console.error("Reports Monthly Sales Error:", monthlySalesError);
+        return res.status(500).json({ error: "Failed to fetch monthly sales for reports", details: monthlySalesError });
+      }
       const monthlyRevenueMap: any = {};
       monthlySales?.forEach(s => {
         const month = s.created_at.substring(0, 7); // YYYY-MM
@@ -700,7 +717,12 @@ async function startServer() {
       // 3. Repair Stats
       let repairsStatsQuery = supabase.from('repairs').select('status');
       if (userId) repairsStatsQuery = repairsStatsQuery.eq('user_id', userId);
-      const { data: repairsData } = await repairsStatsQuery;
+      const { data: repairsData, error: repairsError } = await repairsStatsQuery;
+      
+      if (repairsError) {
+        console.error("Reports Repairs Error:", repairsError);
+        return res.status(500).json({ error: "Failed to fetch repairs for reports", details: repairsError });
+      }
       const repairStatsMap: any = {};
       repairsData?.forEach(r => {
         repairStatsMap[r.status] = (repairStatsMap[r.status] || 0) + 1;
@@ -708,7 +730,12 @@ async function startServer() {
 
       // 4. Top Products
       let topProductsQuery = supabase.from('sale_items').select('quantity, products(name, id, user_id)');
-      const { data: topProductsData } = await topProductsQuery;
+      const { data: topProductsData, error: topProductsError } = await topProductsQuery;
+      
+      if (topProductsError) {
+        console.error("Reports Top Products Error:", topProductsError);
+        return res.status(500).json({ error: "Failed to fetch top products for reports", details: topProductsError });
+      }
       const topProductsMap: any = {};
       topProductsData?.forEach((item: any) => {
         if (userId && item.products?.user_id !== userId) return;
@@ -719,7 +746,12 @@ async function startServer() {
 
       // 5. Top Customers
       let topCustomersQuery = supabase.from('sales').select('total_amount, customers(name, id, user_id)');
-      const { data: topCustomersData } = await topCustomersQuery;
+      const { data: topCustomersData, error: topCustomersError } = await topCustomersQuery;
+      
+      if (topCustomersError) {
+        console.error("Reports Top Customers Error:", topCustomersError);
+        return res.status(500).json({ error: "Failed to fetch top customers for reports", details: topCustomersError });
+      }
       const topCustomersMap: any = {};
       topCustomersData?.forEach((s: any) => {
         if (userId && s.customers?.user_id !== userId) return;
@@ -733,7 +765,12 @@ async function startServer() {
       // 6. Stock Value
       let productsValueQuery = supabase.from('products').select('purchase_price, selling_price, stock_quantity');
       if (userId) productsValueQuery = productsValueQuery.eq('user_id', userId);
-      const { data: productsData } = await productsValueQuery;
+      const { data: productsData, error: productsError } = await productsValueQuery;
+      
+      if (productsError) {
+        console.error("Reports Products Error:", productsError);
+        return res.status(500).json({ error: "Failed to fetch products for reports", details: productsError });
+      }
       const stockValue = productsData?.reduce((acc, p) => ({
         purchase: acc.purchase + ((p.purchase_price || 0) * p.stock_quantity),
         selling: acc.selling + ((p.selling_price || 0) * p.stock_quantity)

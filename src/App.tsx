@@ -25,7 +25,9 @@ import {
   History,
   Eye,
   LogOut,
-  Lock
+  Lock,
+  Loader2,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -147,6 +149,13 @@ export default function App() {
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isViewingHistory, setIsViewingHistory] = useState(false);
   const [selectedCustomerHistory, setSelectedCustomerHistory] = useState<{ customer: Customer, repairs: Repair[], sales: any[] } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingRepair, setEditingRepair] = useState<any | null>(null);
@@ -296,6 +305,7 @@ export default function App() {
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
     try {
+      setIsSaving(true);
       await dbService.addSale({
         customer_id: selectedCustomerId ? parseInt(selectedCustomerId) : null,
         items: cart,
@@ -306,13 +316,16 @@ export default function App() {
       setIsAddingSale(false);
       setCart([]);
       setSelectedCustomerId('');
+      showToast('تمت عملية البيع بنجاح');
       loadSales();
       loadProducts();
       loadStats();
       loadReports();
     } catch (error: any) {
       console.error('Error in handleAddSale:', error);
-      alert('حدث خطأ أثناء إتمام عملية البيع: ' + error.message);
+      showToast('حدث خطأ أثناء إتمام عملية البيع: ' + error.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -324,10 +337,13 @@ export default function App() {
     }
     
     try {
+      setIsSaving(true);
       if (editingCustomer) {
         await dbService.updateCustomer(editingCustomer.id, newCustomer);
+        showToast('تم تحديث بيانات العميل بنجاح');
       } else {
         await dbService.addCustomer(newCustomer);
+        showToast('تمت إضافة العميل بنجاح');
       }
       
       setIsAddingCustomer(false);
@@ -336,7 +352,9 @@ export default function App() {
       loadCustomers();
     } catch (error: any) {
       console.error('Error in handleAddCustomer:', error);
-      alert('حدث خطأ أثناء حفظ العميل: ' + error.message);
+      showToast('حدث خطأ أثناء حفظ العميل: ' + error.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -373,6 +391,7 @@ export default function App() {
     }
 
     try {
+      setIsSaving(true);
       const repairData = {
         ...newRepair,
         customer_id: newRepair.customer_id ? parseInt(newRepair.customer_id) : null,
@@ -384,8 +403,10 @@ export default function App() {
 
       if (editingRepair) {
         await dbService.updateRepair(editingRepair.id, repairData);
+        showToast('تم تحديث بيانات الإصلاح بنجاح');
       } else {
         await dbService.addRepair(repairData);
+        showToast('تمت إضافة الإصلاح بنجاح');
       }
 
       setIsAddingRepair(false);
@@ -404,7 +425,9 @@ export default function App() {
       loadStats();
     } catch (error: any) {
       console.error('Error in handleAddRepair:', error);
-      alert('حدث خطأ أثناء حفظ الإصلاح: ' + error.message);
+      showToast('حدث خطأ أثناء حفظ الإصلاح: ' + error.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -416,6 +439,7 @@ export default function App() {
     }
 
     try {
+      setIsSaving(true);
       const productData = {
         ...newProduct,
         purchase_price: parseFloat(newProduct.purchase_price) || 0,
@@ -426,8 +450,10 @@ export default function App() {
 
       if (editingProduct) {
         await dbService.updateProduct(editingProduct.id, productData);
+        showToast('تم تحديث بيانات المنتج بنجاح');
       } else {
         await dbService.addProduct(productData);
+        showToast('تمت إضافة المنتج بنجاح');
       }
 
       setIsAddingProduct(false);
@@ -446,7 +472,9 @@ export default function App() {
       loadStats();
     } catch (error: any) {
       console.error('Error in handleAddProduct:', error);
-      alert('حدث خطأ أثناء حفظ المنتج: ' + error.message);
+      showToast('حدث خطأ أثناء حفظ المنتج: ' + error.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -584,42 +612,56 @@ export default function App() {
 
   const handleDeleteProduct = async (id: number) => {
     try {
+      setIsSaving(true);
       await dbService.deleteProduct(id);
+      showToast('تم حذف المنتج بنجاح');
       loadProducts();
       loadStats();
       setItemToDelete(null);
     } catch (error: any) {
       console.error('Error in handleDeleteProduct:', error);
-      alert('حدث خطأ أثناء حذف المنتج: ' + error.message);
+      showToast('حدث خطأ أثناء حذف المنتج: ' + error.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleDeleteCustomer = async (id: number) => {
     try {
+      setIsSaving(true);
       await dbService.deleteCustomer(id);
+      showToast('تم حذف العميل بنجاح');
       loadCustomers();
       setItemToDelete(null);
     } catch (error: any) {
       console.error('Error in handleDeleteCustomer:', error);
-      alert('حدث خطأ أثناء حذف العميل: ' + error.message);
+      showToast('حدث خطأ أثناء حذف العميل: ' + error.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleDeleteRepair = async (id: number) => {
     try {
+      setIsSaving(true);
       await dbService.deleteRepair(id);
+      showToast('تم حذف الإصلاح بنجاح');
       loadRepairs();
       loadStats();
       setItemToDelete(null);
     } catch (error: any) {
       console.error('Error in handleDeleteRepair:', error);
-      alert('حدث خطأ أثناء حذف الإصلاح: ' + error.message);
+      showToast('حدث خطأ أثناء حذف الإصلاح: ' + error.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleDeleteSale = async (id: number) => {
     try {
+      setIsSaving(true);
       await dbService.deleteSale(id);
+      showToast('تم حذف عملية البيع بنجاح');
       loadSales();
       loadStats();
       loadProducts(); // Reload products because stock might have changed
@@ -627,7 +669,9 @@ export default function App() {
       setItemToDelete(null);
     } catch (error: any) {
       console.error('Error in handleDeleteSale:', error);
-      alert('حدث خطأ أثناء حذف العملية: ' + error.message);
+      showToast('حدث خطأ أثناء حذف العملية: ' + error.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1316,9 +1360,17 @@ export default function App() {
               <div className="flex gap-3 pt-4">
                 <button 
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                  disabled={isSaving}
+                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center justify-center gap-2"
                 >
-                  إضافة المنتج
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="animate-spin" size={20} />
+                      <span>جاري الحفظ...</span>
+                    </>
+                  ) : (
+                    <span>{editingProduct ? 'تحديث المنتج' : 'إضافة المنتج'}</span>
+                  )}
                 </button>
                 <button 
                   type="button"
@@ -1709,38 +1761,6 @@ export default function App() {
       </nav>
 
       <div className="p-4 border-t border-indigo-900 space-y-3">
-        {/* System Status */}
-        <div className="px-3 py-2 bg-indigo-950/50 rounded-xl text-[10px] font-mono text-indigo-400 border border-indigo-900/50">
-          <div className="flex justify-between mb-1">
-            <span>Server:</span>
-            <span className={serverError ? "text-red-400" : "text-emerald-400"}>
-              {serverError ? "Error" : "OK"}
-            </span>
-          </div>
-          <div className="flex justify-between mb-1">
-            <span>User ID:</span>
-            <span className="text-indigo-300 truncate ml-2" title={session?.user?.id}>
-              {session?.user?.id ? `${session.user.id.substring(0, 8)}...` : "None"}
-            </span>
-          </div>
-          {serverError && (
-            <div className="mt-2 p-2 bg-red-900/30 border border-red-500/30 rounded-lg">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-[9px] font-bold text-red-400 uppercase tracking-wider">Error Log:</span>
-                <button 
-                  onClick={() => alert(serverError)}
-                  className="text-[8px] bg-red-500/20 hover:bg-red-500/40 text-red-300 px-1.5 py-0.5 rounded transition-colors"
-                >
-                  Full View
-                </button>
-              </div>
-              <div className="text-[9px] font-mono text-red-300/80 max-h-32 overflow-y-auto break-all whitespace-pre-wrap scrollbar-thin scrollbar-thumb-red-500/20">
-                {serverError}
-              </div>
-            </div>
-          )}
-        </div>
-
         <div className="flex items-center gap-3 p-3 bg-indigo-900/50 rounded-xl overflow-hidden">
           <div className="w-10 h-10 flex-shrink-0 bg-indigo-500/20 rounded-full flex items-center justify-center text-indigo-400 font-bold">
             {session?.user?.email?.substring(0, 2).toUpperCase()}
@@ -1802,23 +1822,6 @@ export default function App() {
               <AlertTriangle size={16} />
               <span>تعذر الاتصال بالسيرفر. يرجى التأكد من تشغيل المشروع بشكل صحيح.</span>
             </div>
-            {serverError && (
-              <div className="mt-2 p-3 bg-black/20 rounded-lg text-xs font-mono text-white/90 max-w-2xl w-full text-left overflow-x-auto whitespace-pre-wrap break-all border border-white/10">
-                <div className="flex justify-between items-start mb-1 border-b border-white/10 pb-1">
-                  <span className="font-bold uppercase tracking-wider text-[10px] opacity-70">Server Error Details:</span>
-                  <button 
-                    onClick={() => {
-                      navigator.clipboard.writeText(serverError);
-                      alert('تم نسخ الخطأ!');
-                    }}
-                    className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded transition-colors"
-                  >
-                    Copy
-                  </button>
-                </div>
-                {serverError}
-              </div>
-            )}
             <button 
               onClick={() => {
                 checkHealth();
@@ -1914,8 +1917,19 @@ export default function App() {
                       onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
                     />
                   </div>
-                  <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors mt-4">
-                    حفظ العميل
+                  <button 
+                    type="submit" 
+                    disabled={isSaving}
+                    className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors mt-4 flex items-center justify-center gap-2"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="animate-spin" size={20} />
+                        <span>جاري الحفظ...</span>
+                      </>
+                    ) : (
+                      <span>{editingCustomer ? 'تحديث العميل' : 'حفظ العميل'}</span>
+                    )}
                   </button>
                 </form>
               </motion.div>
@@ -2026,8 +2040,19 @@ export default function App() {
                       />
                     </div>
                   </div>
-                  <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors mt-4">
-                    تسجيل الجهاز
+                  <button 
+                    type="submit" 
+                    disabled={isSaving}
+                    className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors mt-4 flex items-center justify-center gap-2"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="animate-spin" size={20} />
+                        <span>جاري الحفظ...</span>
+                      </>
+                    ) : (
+                      <span>{editingRepair ? 'تحديث الإصلاح' : 'تسجيل الجهاز'}</span>
+                    )}
                   </button>
                 </form>
               </motion.div>
@@ -2169,10 +2194,17 @@ export default function App() {
 
                       <button 
                         onClick={handleAddSale}
-                        disabled={cart.length === 0}
-                        className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                        disabled={cart.length === 0 || isSaving}
+                        className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                        إتمام البيع
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="animate-spin" size={20} />
+                            <span>جاري المعالجة...</span>
+                          </>
+                        ) : (
+                          'إتمام البيع'
+                        )}
                       </button>
                     </div>
                   </div>
@@ -2209,14 +2241,48 @@ export default function App() {
                         if (itemToDelete.type === 'repair') handleDeleteRepair(itemToDelete.id);
                         if (itemToDelete.type === 'sale') handleDeleteSale(itemToDelete.id);
                       }}
-                      className="flex-1 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors"
+                      disabled={isSaving}
+                      className="flex-1 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      تأكيد الحذف
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="animate-spin" size={18} />
+                          <span>جاري الحذف...</span>
+                        </>
+                      ) : (
+                        'تأكيد الحذف'
+                      )}
                     </button>
                   </div>
                 </div>
               </motion.div>
             </div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, x: '-50%' }}
+              animate={{ opacity: 1, y: 0, x: '-50%' }}
+              exit={{ opacity: 0, y: 50, x: '-50%' }}
+              className={cn(
+                "fixed bottom-8 left-1/2 z-[300] px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 min-w-[300px] text-right",
+                toast.type === 'success' ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+              )}
+              dir="rtl"
+            >
+              {toast.type === 'success' ? (
+                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                  <Check size={14} />
+                </div>
+              ) : (
+                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                  <AlertTriangle size={14} />
+                </div>
+              )}
+              <span className="font-bold text-sm">{toast.message}</span>
+            </motion.div>
           )}
         </AnimatePresence>
       </main>

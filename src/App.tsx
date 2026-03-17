@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, NavLink, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -75,20 +75,24 @@ const SidebarItem = ({ icon: Icon, label, to, onClick }: { icon: any, label: str
   </NavLink>
 );
 
-const StatCard = ({ label, value, icon: Icon, color, trend }: { label: string, value: string | number, icon: any, color: string, trend?: string }) => (
+const StatCard = ({ label, value, icon: Icon, color, trend, loading }: { label: string, value: string | number, icon: any, color: string, trend?: string, loading?: boolean }) => (
   <div className="p-6 bg-white border border-slate-100 rounded-2xl shadow-sm">
     <div className="flex items-center justify-between mb-4">
       <div className={cn("p-2 rounded-xl", color)}>
         <Icon size={24} className="text-white" />
       </div>
-      {trend && (
+      {trend && !loading && (
         <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
           {trend}
         </span>
       )}
     </div>
     <p className="text-sm font-medium text-slate-500">{label}</p>
-    <h3 className="text-2xl font-bold text-slate-900 mt-1">{value}</h3>
+    {loading ? (
+      <div className="h-8 w-24 bg-slate-100 animate-pulse rounded-lg mt-1"></div>
+    ) : (
+      <h3 className="text-2xl font-bold text-slate-900 mt-1">{value}</h3>
+    )}
   </div>
 );
 
@@ -107,7 +111,9 @@ export default function App() {
   const [isServerDown, setIsServerDown] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const lastUserId = useRef<string | null>(null);
   const [repairStatusFilter, setRepairStatusFilter] = useState<string>('all');
 
   const checkHealth = async () => {
@@ -208,10 +214,13 @@ export default function App() {
 
   const loadStats = async () => {
     try {
+      setIsLoadingStats(true);
       const data = await dbService.getStats(profitPeriod, customStartDate, customEndDate);
       setStats(data);
     } catch (error) {
       console.error("Error loading stats:", error);
+    } finally {
+      setIsLoadingStats(false);
     }
   };
 
@@ -539,7 +548,11 @@ export default function App() {
   }, [profitPeriod, customStartDate, customEndDate]);
 
   const loadInitialData = async () => {
-    setIsInitialLoading(true);
+    // Only show full screen loader if we don't have stats yet
+    if (!stats) {
+      setIsInitialLoading(true);
+    }
+    
     try {
       // Load bootstrap data and stats in parallel
       const [bootstrapData, statsData, reportsData] = await Promise.all([
@@ -570,7 +583,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (session) {
+    if (session?.user?.id && session.user.id !== lastUserId.current) {
+      lastUserId.current = session.user.id;
       loadInitialData();
     }
   }, [session]);
@@ -806,24 +820,28 @@ export default function App() {
             value={stats?.repairedCount || 0} 
             icon={CheckCircle2} 
             color="bg-indigo-500" 
+            loading={isLoadingStats}
           />
           <StatCard 
             label={`الأجهزة التي تم بيعها ${periodSuffix[profitPeriod]}`} 
             value={stats?.soldCount || 0} 
             icon={ShoppingCart} 
             color="bg-blue-500" 
+            loading={isLoadingStats}
           />
           <StatCard 
             label={profitLabels[profitPeriod]} 
             value={formatCurrency(stats?.profit || 0)} 
             icon={TrendingUp} 
             color="bg-violet-500" 
+            loading={isLoadingStats}
           />
           <StatCard 
             label="قيد الإصلاح" 
             value={stats?.pendingRepairs || 0} 
             icon={Clock} 
             color="bg-amber-500" 
+            loading={isLoadingStats}
           />
         </div>
 
@@ -1404,15 +1422,27 @@ export default function App() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="p-4 bg-white border border-slate-100 rounded-xl shadow-sm">
           <p className="text-xs text-slate-500 mb-1">إجمالي المبيعات</p>
-          <p className="text-xl font-bold text-slate-900">{sales.length}</p>
+          {isInitialLoading ? (
+            <div className="h-7 w-16 bg-slate-100 animate-pulse rounded mt-1"></div>
+          ) : (
+            <p className="text-xl font-bold text-slate-900">{sales.length}</p>
+          )}
         </div>
         <div className="p-4 bg-white border border-slate-100 rounded-xl shadow-sm">
           <p className="text-xs text-slate-500 mb-1">مدخول اليوم</p>
-          <p className="text-xl font-bold text-indigo-600">{formatCurrency(stats?.dailyProfit || 0)}</p>
+          {isLoadingStats ? (
+            <div className="h-7 w-24 bg-slate-100 animate-pulse rounded mt-1"></div>
+          ) : (
+            <p className="text-xl font-bold text-indigo-600">{formatCurrency(stats?.dailyProfit || 0)}</p>
+          )}
         </div>
         <div className="p-4 bg-white border border-slate-100 rounded-xl shadow-sm">
           <p className="text-xs text-slate-500 mb-1">المنتجات المباعة</p>
-          <p className="text-xl font-bold text-slate-900">{stats?.soldCount || 0}</p>
+          {isLoadingStats ? (
+            <div className="h-7 w-16 bg-slate-100 animate-pulse rounded mt-1"></div>
+          ) : (
+            <p className="text-xl font-bold text-slate-900">{stats?.soldCount || 0}</p>
+          )}
         </div>
       </div>
 
@@ -1491,7 +1521,11 @@ export default function App() {
             </div>
             <p className="text-sm font-bold text-slate-500">قيمة المخزون</p>
           </div>
-          <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(stockValue.purchase)}</h3>
+          {isInitialLoading ? (
+            <div className="h-8 w-32 bg-slate-100 animate-pulse rounded-lg mt-1"></div>
+          ) : (
+            <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(stockValue.purchase)}</h3>
+          )}
           <p className="mt-2 text-xs text-slate-400">إجمالي تكلفة السلع المتوفرة</p>
         </div>
         
@@ -1502,7 +1536,11 @@ export default function App() {
             </div>
             <p className="text-sm font-bold text-slate-500">الأرباح المتوقعة</p>
           </div>
-          <h3 className="text-2xl font-bold text-emerald-600">{formatCurrency(stockValue.selling - stockValue.purchase)}</h3>
+          {isInitialLoading ? (
+            <div className="h-8 w-32 bg-slate-100 animate-pulse rounded-lg mt-1"></div>
+          ) : (
+            <h3 className="text-2xl font-bold text-emerald-600">{formatCurrency(stockValue.selling - stockValue.purchase)}</h3>
+          )}
           <p className="mt-2 text-xs text-slate-400">في حال بيع كل المخزون الحالي</p>
         </div>
 
@@ -1513,7 +1551,11 @@ export default function App() {
             </div>
             <p className="text-sm font-bold text-slate-500">كفاءة الإصلاح</p>
           </div>
-          <h3 className="text-2xl font-bold text-blue-600">{repairSuccessRate}%</h3>
+          {isInitialLoading ? (
+            <div className="h-8 w-24 bg-slate-100 animate-pulse rounded-lg mt-1"></div>
+          ) : (
+            <h3 className="text-2xl font-bold text-blue-600">{repairSuccessRate}%</h3>
+          )}
           <p className="mt-2 text-xs text-slate-400">نسبة نجاح عمليات الإصلاح</p>
         </div>
 
@@ -1524,9 +1566,13 @@ export default function App() {
             </div>
             <p className="text-sm font-bold text-slate-500">أداء الشهر الحالي</p>
           </div>
-          <h3 className="text-2xl font-bold text-violet-600">
-            {formatCurrency(monthlyRevenue.find(m => m.month === format(new Date(), 'yyyy-MM'))?.profit || 0)}
-          </h3>
+          {isInitialLoading ? (
+            <div className="h-8 w-32 bg-slate-100 animate-pulse rounded-lg mt-1"></div>
+          ) : (
+            <h3 className="text-2xl font-bold text-violet-600">
+              {formatCurrency(monthlyRevenue.find(m => m.month === format(new Date(), 'yyyy-MM'))?.profit || 0)}
+            </h3>
+          )}
           <p className="mt-2 text-xs text-slate-400">صافي أرباح شهر {format(new Date(), 'MMMM', { locale: ar })}</p>
         </div>
       </div>

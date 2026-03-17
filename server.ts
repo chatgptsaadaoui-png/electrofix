@@ -42,17 +42,22 @@ async function startServer() {
 
   // Health check at the very top
   app.get("/api/health", (req, res) => {
-    console.log("SERVER.TS: Health check requested");
-    res.json({ 
-      status: "ok", 
-      supabaseConfigured: isSupabaseConfiguredServer,
-      env: {
-        NODE_ENV: process.env.NODE_ENV,
-        hasUrl: !!supabaseUrl,
-        hasKey: !!supabaseKey,
-        urlPrefix: supabaseUrl ? supabaseUrl.substring(0, 15) : 'none'
-      }
-    });
+    try {
+      console.log("SERVER.TS: Health check requested");
+      res.json({ 
+        status: "ok", 
+        supabaseConfigured: isSupabaseConfiguredServer,
+        env: {
+          NODE_ENV: process.env.NODE_ENV || 'development',
+          hasUrl: !!supabaseUrl,
+          hasKey: !!supabaseKey,
+          urlPrefix: supabaseUrl ? String(supabaseUrl).substring(0, 15) : 'none'
+        }
+      });
+    } catch (err: any) {
+      console.error("SERVER.TS: Health check failed:", err);
+      res.status(500).json({ error: "Internal Server Error in Health Check", details: err.message });
+    }
   });
 
   // API Routes

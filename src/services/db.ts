@@ -16,17 +16,21 @@ const apiFetch = async (endpoint: string, options: any = {}) => {
     });
     if (!response.ok) {
       const text = await response.text();
-      console.error(`[dbService] API Error: ${response.status} ${text} for ${endpoint}`);
+      console.error(`[dbService] API Error: ${response.status} ${text.substring(0, 200)} for ${endpoint}`);
       try {
-        if (text && text !== 'undefined') {
+        if (text && text.trim().startsWith('{')) {
           const json = JSON.parse(text);
           const errorMsg = json.error || `API Error: ${response.status}`;
           const details = json.details ? ` (${typeof json.details === 'object' ? JSON.stringify(json.details) : json.details})` : '';
           throw new Error(`${errorMsg}${details}`);
         }
-        throw new Error(`API Error: ${response.status}`);
+        // If it's HTML (Vercel error page), show the status and a snippet
+        if (text.includes('<html')) {
+          throw new Error(`Server Error (${response.status}): Vercel crashed or route not found.`);
+        }
+        throw new Error(`API Error: ${response.status} - ${text.substring(0, 50)}`);
       } catch (e: any) {
-        if (e.message.startsWith('API Error')) throw e;
+        if (e.message.includes('Server Error') || e.message.startsWith('API Error')) throw e;
         throw new Error(`API Error: ${response.status}`);
       }
     }

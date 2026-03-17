@@ -1,37 +1,24 @@
-import * as dotenv from "dotenv";
-try {
-  dotenv.config();
-} catch (e) {
-  console.warn("SERVER.TS: Failed to load .env file (this is normal in some environments)");
-}
-
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 
 console.log("SERVER.TS: Starting script execution...");
 
-async function startServer() {
-  console.log("SERVER.TS: startServer() called");
-  const app = express();
-  const PORT = 3000;
+const app = express();
+const PORT = 3000;
 
-  // Export app for Vercel
-  (startServer as any).app = app;
+let supabase: any;
+let isSupabaseConfiguredServer = false;
 
-  // Health check at the VERY top, before anything else
-  app.get("/api/health", (req, res) => {
-    res.json({ 
-      status: "ok", 
-      timestamp: new Date().toISOString(),
-      config: {
-        supabaseUrl: !!process.env.SUPABASE_URL || !!process.env.VITE_SUPABASE_URL,
-        supabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY || !!process.env.SUPABASE_ANON_KEY || !!process.env.VITE_SUPABASE_ANON_KEY,
-        nodeEnv: process.env.NODE_ENV
-      }
-    });
-  });
+async function init() {
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      const dotenv = await import("dotenv");
+      dotenv.config();
+    } catch (e) {
+      console.warn("SERVER.TS: Failed to load .env file (this is normal in some environments)");
+    }
+  }
 
   // Supabase Configuration - Try both VITE_ and standard names
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -40,28 +27,41 @@ async function startServer() {
   console.log("SERVER.TS: Supabase URL configured:", !!supabaseUrl);
   console.log("SERVER.TS: Supabase Key configured:", !!supabaseKey);
 
-  if (!supabaseUrl || !supabaseKey) {
-    console.error("MISSING SUPABASE CREDENTIALS: Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the Settings menu.");
-  }
+  isSupabaseConfiguredServer = !!supabaseUrl && supabaseUrl !== "https://placeholder.supabase.co";
 
-  const isSupabaseConfiguredServer = !!supabaseUrl && supabaseUrl !== "https://placeholder.supabase.co";
-
-  const supabase = createClient(
-    supabaseUrl || "https://placeholder.supabase.co", 
-    supabaseKey || "placeholder", 
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false
+  try {
+    console.log("SERVER.TS: Creating Supabase client with URL:", supabaseUrl?.substring(0, 15) + "...");
+    supabase = createClient(
+      supabaseUrl || "https://placeholder.supabase.co", 
+      supabaseKey || "placeholder", 
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false
+        }
       }
-    }
-  );
+    );
+    console.log("SERVER.TS: Supabase client created successfully");
+  } catch (e: any) {
+    console.error("SERVER.TS: Failed to create Supabase client:", e);
+  }
 
   app.use(express.json());
 
-  // API Routes
-  
+  // Health check at the VERY top, before anything else
+  app.get("/api/health", (req, res) => {
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      config: {
+        supabaseUrl: !!supabaseUrl,
+        supabaseKey: !!supabaseKey,
+        nodeEnv: process.env.NODE_ENV
+      }
+    });
+  });
+
   // Middleware to get user ID
   app.use("/api", (req, res, next) => {
     const userId = req.headers['x-user-id'];
@@ -77,6 +77,11 @@ async function startServer() {
     next();
   });
 
+  await setupServer();
+}
+
+async function setupServer() {
+  console.log("SERVER.TS: setupServer() starting...");
   // Dashboard Stats
   app.get("/api/stats", async (req, res) => {
     try {
@@ -877,6 +882,7 @@ async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     try {
       console.log("SERVER.TS: Initializing Vite middleware...");
+      const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",
@@ -886,22 +892,22 @@ async function startServer() {
     } catch (e) {
       console.error("SERVER.TS: Failed to initialize Vite middleware:", e);
     }
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
-  if (process.env.NODE_ENV !== "production") {
+    
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`SERVER.TS: Server running on http://0.0.0.0:${PORT}`);
     });
+  } else {
+    console.log("SERVER.TS: Running in production mode (Vercel)");
+    // In Vercel, we don't need to serve static files from Express
+    // because Vercel handles the static routing via vercel.json
   }
-  
-  return app;
+  console.log("SERVER.TS: setupServer() finished");
 }
 
-// Export the promise for Vercel
-export default startServer();
+// Start the setup
+init().catch(err => {
+  console.error("SERVER.TS: Critical failure in init():", err);
+});
+
+// Export app for Vercel
+export default app;

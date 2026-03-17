@@ -1724,8 +1724,8 @@ export default function App() {
             </span>
           </div>
           {serverError && (
-            <div className="mt-1 text-red-400 break-words leading-tight text-[9px]">
-              {serverError.substring(0, 50)}...
+            <div className="mt-1 text-red-400 break-words leading-tight text-[9px] max-h-20 overflow-y-auto">
+              {serverError}
             </div>
           )}
         </div>

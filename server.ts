@@ -61,19 +61,29 @@ async function startServer() {
   
   // Middleware to get user ID
   app.use("/api", (req, res, next) => {
-    console.log(`API Request: ${req.method} ${req.path}`);
     const userId = req.headers['x-user-id'];
-    if (!userId && req.method !== 'GET' && req.path !== '/stats') {
-      // For now, we'll allow it but in a real app we'd block
-      // return res.status(401).json({ error: "Unauthorized" });
+    
+    // Normalize userId (handle "null", "undefined" strings from frontend)
+    if (userId === 'null' || userId === 'undefined' || !userId) {
+      (req as any).userId = null;
+    } else {
+      (req as any).userId = userId;
     }
-    (req as any).userId = userId;
+    
+    console.log(`API Request: ${req.method} ${req.path} | User: ${(req as any).userId || 'Anonymous'}`);
     next();
   });
 
   // Dashboard Stats
   app.get("/api/stats", async (req, res) => {
     try {
+      if (!isSupabaseConfiguredServer) {
+        return res.status(503).json({ 
+          error: "Database not configured", 
+          details: "Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the Settings menu." 
+        });
+      }
+
       const { period, startDate, endDate } = req.query;
       const userId = (req as any).userId;
       
@@ -132,6 +142,16 @@ async function startServer() {
         (userId ? supabase.from('sales').select('id').gte('created_at', todayStart.toISOString()).eq('user_id', userId) : supabase.from('sales').select('id').gte('created_at', todayStart.toISOString())),
         (userId ? supabase.from('repairs').select('expected_price, cost_price').or('status.eq.repaired,status.eq.delivered').gte('received_date', todayStart.toISOString()).eq('user_id', userId) : supabase.from('repairs').select('expected_price, cost_price').or('status.eq.repaired,status.eq.delivered').gte('received_date', todayStart.toISOString()))
       ]);
+
+      // Check for errors in results
+      const errors = [repairedRes, salesRes, pendingRes, productsRes, todaySalesRes, todayRepairsRes]
+        .filter(r => r.error)
+        .map(r => r.error);
+
+      if (errors.length > 0) {
+        console.error("Supabase Query Errors:", JSON.stringify(errors));
+        return res.status(500).json({ error: "Database query failed", details: errors[0] });
+      }
 
       const repairedCount = repairedRes.count;
       const salesData = salesRes.data;
@@ -199,19 +219,29 @@ async function startServer() {
   app.get("/api/bootstrap", async (req, res) => {
     console.log("HIT: /api/bootstrap");
     try {
+      if (!isSupabaseConfiguredServer) {
+        return res.status(503).json({ error: "Database not configured" });
+      }
+
       const userId = (req as any).userId;
       
-      const [
-        customersRes,
-        productsRes,
-        repairsRes,
-        salesRes
-      ] = await Promise.all([
-        (userId ? supabase.from('customers').select('*').order('name').eq('user_id', userId) : supabase.from('customers').select('*').order('name')),
-        (userId ? supabase.from('products').select('*').order('name').eq('user_id', userId) : supabase.from('products').select('*').order('name')),
-        (userId ? supabase.from('repairs').select('*, customers(name, phone)').order('received_date', { ascending: false }).eq('user_id', userId) : supabase.from('repairs').select('*, customers(name, phone)').order('received_date', { ascending: false })),
-        (userId ? supabase.from('sales').select('*').order('created_at', { ascending: false }).eq('user_id', userId) : supabase.from('sales').select('*').order('created_at', { ascending: false }))
-      ]);
+      // Fetch each one separately to avoid one failure blocking everything
+      const customersRes = await (userId ? supabase.from('customers').select('*').order('name').eq('user_id', userId) : supabase.from('customers').select('*').order('name'));
+      const productsRes = await (userId ? supabase.from('products').select('*').order('name').eq('user_id', userId) : supabase.from('products').select('*').order('name'));
+      
+      // Try complex query first, fallback to simple if it fails (common if FK is missing)
+      let repairsRes = await (userId ? 
+        supabase.from('repairs').select('*, customers(name, phone)').order('received_date', { ascending: false }).eq('user_id', userId) : 
+        supabase.from('repairs').select('*, customers(name, phone)').order('received_date', { ascending: false }));
+
+      if (repairsRes.error) {
+        console.warn("Complex repairs query failed, falling back to simple query:", repairsRes.error.message);
+        repairsRes = await (userId ? 
+          supabase.from('repairs').select('*').order('received_date', { ascending: false }).eq('user_id', userId) : 
+          supabase.from('repairs').select('*').order('received_date', { ascending: false }));
+      }
+
+      const salesRes = await (userId ? supabase.from('sales').select('*').order('created_at', { ascending: false }).eq('user_id', userId) : supabase.from('sales').select('*').order('created_at', { ascending: false }));
 
       res.json({
         customers: customersRes.data || [],
@@ -221,12 +251,31 @@ async function startServer() {
           customer_name: (r as any).customers?.name || 'عميل غير معروف',
           customer_phone: (r as any).customers?.phone || ''
         })) || [],
-        sales: salesRes.data || []
+        sales: salesRes.data || [],
+        debug: {
+          customersError: customersRes.error,
+          productsError: productsRes.error,
+          repairsError: repairsRes.error,
+          salesError: salesRes.error
+        }
       });
     } catch (error: any) {
-      console.error("Bootstrap error:", JSON.stringify(error));
-      res.status(500).json({ error: "Failed to bootstrap data" });
+      console.error("Bootstrap error:", error);
+      res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
+  });
+
+  // Debug Endpoint to check table existence
+  app.get("/api/debug/tables", async (req, res) => {
+    const tables = ['customers', 'products', 'repairs', 'sales', 'sale_items'];
+    const results: any = {};
+    
+    for (const table of tables) {
+      const { error, count } = await supabase.from(table).select('*', { count: 'exact', head: true }).limit(1);
+      results[table] = error ? { status: 'error', message: error.message } : { status: 'ok', count };
+    }
+    
+    res.json(results);
   });
 
   // Customers

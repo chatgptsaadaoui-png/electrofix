@@ -6,27 +6,31 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 
-// Supabase Configuration
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error("MISSING SUPABASE CREDENTIALS: Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (preferred) or SUPABASE_ANON_KEY in the Settings menu.");
-}
-
-const isSupabaseConfiguredServer = !!supabaseUrl && supabaseUrl !== "https://placeholder.supabase.co";
-
-const supabase = createClient(supabaseUrl || "https://placeholder.supabase.co", supabaseKey || "placeholder", {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false
-  }
-});
-
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Supabase Configuration
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.error("MISSING SUPABASE CREDENTIALS: Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the Settings menu.");
+  }
+
+  const isSupabaseConfiguredServer = !!supabaseUrl && supabaseUrl !== "https://placeholder.supabase.co";
+
+  const supabase = createClient(
+    supabaseUrl || "https://placeholder.supabase.co", 
+    supabaseKey || "placeholder", 
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    }
+  );
 
   app.use(express.json());
 
@@ -37,9 +41,7 @@ async function startServer() {
       details: {
         url: !!process.env.SUPABASE_URL,
         serviceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-        anonKey: !!process.env.SUPABASE_ANON_KEY,
-        viteUrl: !!process.env.VITE_SUPABASE_URL,
-        viteAnonKey: !!process.env.VITE_SUPABASE_ANON_KEY
+        anonKey: !!process.env.SUPABASE_ANON_KEY
       }
     });
   });

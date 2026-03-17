@@ -16,11 +16,11 @@ const apiFetch = async (endpoint: string, options: any = {}) => {
     });
     if (!response.ok) {
       const text = await response.text();
-      console.error(`[dbService] API Error: ${response.status} ${text}`);
+      console.error(`[dbService] API Error: ${response.status} ${text} for ${endpoint}`);
       try {
         if (text && text !== 'undefined') {
           const json = JSON.parse(text);
-          throw new Error(json.error || 'API Error');
+          throw new Error(json.error || `API Error: ${response.status}`);
         }
         throw new Error(`API Error: ${response.status}`);
       } catch (e: any) {
@@ -35,12 +35,13 @@ const apiFetch = async (endpoint: string, options: any = {}) => {
     try {
       return JSON.parse(text);
     } catch (e) {
-      console.error(`[dbService] JSON Parse Error: ${text.substring(0, 100)}`);
+      console.error(`[dbService] JSON Parse Error: ${text.substring(0, 100)} for ${endpoint}`);
       throw new Error('Invalid JSON response from server');
     }
   } catch (error: any) {
+    console.error(`[dbService] Fetch error for ${endpoint}:`, error);
     if (error.message === 'Failed to fetch') {
-      throw new Error('تعذر الاتصال بالسيرفر. يرجى التأكد من أن التطبيق يعمل.');
+      throw new Error('تعذر الاتصال بالسيرفر. يرجى التأكد من أن التطبيق يعمل بشكل صحيح في الإعدادات.');
     }
     throw error;
   }

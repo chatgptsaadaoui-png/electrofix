@@ -1655,25 +1655,26 @@ export default function App() {
         />
       </nav>
 
-      <div className="p-4 border-t border-indigo-900">
-        <div className="flex items-center justify-between p-3 bg-indigo-900/50 rounded-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center text-indigo-400 font-bold">
-              {session?.user?.email?.substring(0, 2).toUpperCase()}
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-sm font-bold text-white truncate">{session?.user?.email}</p>
-              <p className="text-xs text-indigo-400">مدير المحل</p>
-            </div>
+      <div className="p-4 border-t border-indigo-900 space-y-3">
+        <div className="flex items-center gap-3 p-3 bg-indigo-900/50 rounded-xl overflow-hidden">
+          <div className="w-10 h-10 flex-shrink-0 bg-indigo-500/20 rounded-full flex items-center justify-center text-indigo-400 font-bold">
+            {session?.user?.email?.substring(0, 2).toUpperCase()}
           </div>
-          <button 
-            onClick={handleLogout}
-            className="p-2 text-indigo-400 hover:text-white hover:bg-indigo-800 rounded-lg transition-colors"
-            title="تسجيل الخروج"
-          >
-            <LogOut size={18} />
-          </button>
+          <div className="overflow-hidden">
+            <p className="text-sm font-bold text-white truncate">
+              {session?.user?.email?.split('@')[0]}
+            </p>
+            <p className="text-xs text-indigo-400">مدير المحل</p>
+          </div>
         </div>
+
+        <button 
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors font-bold text-sm shadow-lg shadow-red-900/20"
+        >
+          <LogOut size={18} />
+          <span>deconnection</span>
+        </button>
       </div>
     </div>
   );
@@ -1711,9 +1712,20 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {isServerDown && (
-          <div className="bg-red-600 text-white px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-2 animate-pulse">
-            <AlertTriangle size={16} />
-            <span>تعذر الاتصال بالسيرفر. يرجى التأكد من تشغيل المشروع.</span>
+          <div className="bg-red-600 text-white px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-3 animate-pulse">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={16} />
+              <span>تعذر الاتصال بالسيرفر. يرجى التأكد من تشغيل المشروع بشكل صحيح.</span>
+            </div>
+            <button 
+              onClick={() => {
+                checkHealth();
+                loadInitialData();
+              }}
+              className="px-3 py-1 bg-white text-red-600 rounded-lg text-xs hover:bg-red-50 transition-colors"
+            >
+              إعادة المحاولة
+            </button>
           </div>
         )}
         {/* Header */}

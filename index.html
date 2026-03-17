@@ -8,13 +8,16 @@
       // Ensure window.fetch is writable to prevent "only a getter" errors
       (function() {
         try {
-          const d = Object.getOwnPropertyDescriptor(window, 'fetch');
-          if (d && (d.get || !d.writable) && d.configurable) {
-            const f = window.fetch;
-            delete window.fetch;
-            window.fetch = f;
-          }
-        } catch (e) {}
+          const originalFetch = window.fetch;
+          Object.defineProperty(window, 'fetch', {
+            value: originalFetch,
+            writable: true,
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {
+          console.warn("Could not redefine fetch:", e);
+        }
       })();
     </script>
   </head>

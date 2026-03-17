@@ -99,16 +99,27 @@ export default function App() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isServerDown, setIsServerDown] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [repairStatusFilter, setRepairStatusFilter] = useState<string>('all');
 
   const checkHealth = async () => {
     try {
+      console.log("Checking server health...");
       const res = await fetch('/api/health');
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Health check non-ok:", res.status, text);
+        throw new Error(`Server returned ${res.status}`);
+      }
+      const data = await res.json();
+      console.log("Health check success:", data);
       setIsServerDown(false);
-    } catch (e) {
+      setServerError(null);
+    } catch (e: any) {
+      console.error("Health check failed:", e);
+      setServerError(e.message || "Unknown error");
       setIsServerDown(true);
     }
   };
@@ -1712,17 +1723,22 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {isServerDown && (
-          <div className="bg-red-600 text-white px-4 py-2 text-center text-sm font-bold flex items-center justify-center gap-3 animate-pulse">
+          <div className="bg-red-600 text-white px-4 py-2 text-center text-sm font-bold flex flex-col items-center justify-center gap-1 animate-pulse">
             <div className="flex items-center gap-2">
               <AlertTriangle size={16} />
               <span>تعذر الاتصال بالسيرفر. يرجى التأكد من تشغيل المشروع بشكل صحيح.</span>
             </div>
+            {serverError && (
+              <div className="text-[10px] opacity-80 font-mono">
+                Error: {serverError}
+              </div>
+            )}
             <button 
               onClick={() => {
                 checkHealth();
                 loadInitialData();
               }}
-              className="px-3 py-1 bg-white text-red-600 rounded-lg text-xs hover:bg-red-50 transition-colors"
+              className="mt-1 px-3 py-1 bg-white text-red-600 rounded-lg text-xs hover:bg-red-50 transition-colors"
             >
               إعادة المحاولة
             </button>

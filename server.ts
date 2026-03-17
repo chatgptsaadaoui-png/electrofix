@@ -6,13 +6,19 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 
+console.log("SERVER.TS: Starting script execution...");
+
 async function startServer() {
+  console.log("SERVER.TS: startServer() called");
   const app = express();
   const PORT = 3000;
 
-  // Supabase Configuration
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  // Supabase Configuration - Try both VITE_ and standard names
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  console.log("SERVER.TS: Supabase URL configured:", !!supabaseUrl);
+  console.log("SERVER.TS: Supabase Key configured:", !!supabaseKey);
 
   if (!supabaseUrl || !supabaseKey) {
     console.error("MISSING SUPABASE CREDENTIALS: Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the Settings menu.");
@@ -34,14 +40,17 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Health check at the very top
   app.get("/api/health", (req, res) => {
+    console.log("SERVER.TS: Health check requested");
     res.json({ 
       status: "ok", 
       supabaseConfigured: isSupabaseConfiguredServer,
-      details: {
-        url: !!process.env.SUPABASE_URL,
-        serviceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-        anonKey: !!process.env.SUPABASE_ANON_KEY
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        hasUrl: !!supabaseUrl,
+        hasKey: !!supabaseKey,
+        urlPrefix: supabaseUrl ? supabaseUrl.substring(0, 15) : 'none'
       }
     });
   });
@@ -251,7 +260,7 @@ async function startServer() {
       res.json({ id: data[0].id });
     } catch (error: any) {
       console.error("Customers POST error:", JSON.stringify(error));
-      res.status(500).json({ error: "Failed to add customer" });
+      res.status(500).json({ error: "Failed to add customer", details: error.message || error });
     }
   });
 
@@ -266,7 +275,7 @@ async function startServer() {
       res.json({ success: true });
     } catch (error: any) {
       console.error("Customers PUT error:", JSON.stringify(error));
-      res.status(500).json({ error: "Failed to update customer" });
+      res.status(500).json({ error: "Failed to update customer", details: error.message || error });
     }
   });
 
@@ -374,7 +383,7 @@ async function startServer() {
       res.json({ id: data[0].id });
     } catch (error: any) {
       console.error("Products POST error:", JSON.stringify(error));
-      res.status(500).json({ error: "Failed to add product" });
+      res.status(500).json({ error: "Failed to add product", details: error.message || error });
     }
   });
 
@@ -498,7 +507,7 @@ async function startServer() {
       res.json({ id: data[0].id });
     } catch (error: any) {
       console.error("Repairs POST error:", JSON.stringify(error));
-      res.status(500).json({ error: "Failed to add repair" });
+      res.status(500).json({ error: "Failed to add repair", details: error.message || error });
     }
   });
 
@@ -752,11 +761,17 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    try {
+      console.log("SERVER.TS: Initializing Vite middleware...");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      console.log("SERVER.TS: Vite middleware initialized");
+    } catch (e) {
+      console.error("SERVER.TS: Failed to initialize Vite middleware:", e);
+    }
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
@@ -766,8 +781,10 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`SERVER.TS: Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("SERVER.TS: Critical failure in startServer():", err);
+});

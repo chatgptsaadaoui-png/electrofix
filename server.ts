@@ -17,6 +17,9 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Export app for Vercel
+  (startServer as any).app = app;
+
   // Health check at the VERY top, before anything else
   app.get("/api/health", (req, res) => {
     res.json({ 
@@ -891,11 +894,14 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`SERVER.TS: Server running on http://0.0.0.0:${PORT}`);
-  });
+  if (process.env.NODE_ENV !== "production") {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`SERVER.TS: Server running on http://0.0.0.0:${PORT}`);
+    });
+  }
+  
+  return app;
 }
 
-startServer().catch(err => {
-  console.error("SERVER.TS: Critical failure in startServer():", err);
-});
+// Export the promise for Vercel
+export default startServer();
